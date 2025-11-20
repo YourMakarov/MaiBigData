@@ -47,10 +47,10 @@ SELECT DISTINCT sale_seller_id, seller_first_name, seller_last_name, seller_emai
 FROM mock_data
 ON CONFLICT (seller_id) DO NOTHING;
 
--- Заполнение dim_product (удалены TO_DATE)
+-- Заполнение dim_product 
 INSERT INTO dim_product (product_id, name, price, quantity, weight, description, rating, reviews, release_date, expiry_date, supplier_id, category_id, pet_category_id, brand_id, material_id, color_id, size_id)
 SELECT DISTINCT m.sale_product_id, m.product_name, m.product_price, m.product_quantity, m.product_weight, m.product_description, m.product_rating, m.product_reviews,
-       m.product_release_date, m.product_expiry_date,  -- Просто поля, без TO_DATE
+       m.product_release_date, m.product_expiry_date,  
        s.supplier_id, pc.category_id, petc.pet_category_id, b.brand_id, mat.material_id, col.color_id, sz.size_id
 FROM mock_data m
 JOIN dim_supplier s ON s.name = m.supplier_name AND s.contact = m.supplier_contact AND s.email = m.supplier_email AND s.phone = m.supplier_phone AND s.address = m.supplier_address AND s.city = m.supplier_city AND s.country = m.supplier_country
@@ -62,9 +62,9 @@ JOIN dim_color col ON col.name = m.product_color
 JOIN dim_size sz ON sz.name = m.product_size
 ON CONFLICT (product_id) DO NOTHING;
 
--- Заполнение fact_sales (удален TO_DATE)
+-- Заполнение fact_sales
 INSERT INTO fact_sales (sale_id, sale_date, customer_id, seller_id, product_id, store_id, quantity, total_price)
-SELECT m.id, m.sale_date,  -- Просто поле, без TO_DATE
+SELECT m.id, m.sale_date, 
        m.sale_customer_id, m.sale_seller_id, m.sale_product_id,
        s.store_id, m.sale_quantity, m.sale_total_price
 FROM mock_data m
