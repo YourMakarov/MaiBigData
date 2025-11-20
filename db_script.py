@@ -3,18 +3,18 @@ import pandas as pd
 import os
 from sqlalchemy import create_engine
 
-# Параметры подключения
+
 DB_HOST = 'localhost'
 DB_PORT = '5432'
 DB_NAME = 'mydatabase'
 DB_USER = 'myuser'
 DB_PASSWORD = 'mypassword'
 
-# Путь к CSV
+
 CSV_DIR = 'data/'
 CSV_FILES = [f'mock_data{i}.csv' for i in range(1, 11)]
 
-# Engine для SQLAlchemy
+
 ENGINE = create_engine(f'postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
 
 def connect_db():
@@ -109,7 +109,7 @@ def import_csv_to_mock():
             }
             df = pd.read_csv(full_path, dtype=dtype_dict, quotechar='"', escapechar='\\', on_bad_lines='warn')
             
-            # Удаляем колонку 'id', если она есть в CSV (чтобы SERIAL генерировал уникальные id)
+
             if 'id' in df.columns:
                 df = df.drop(columns=['id'])
             
