@@ -1,0 +1,3 @@
+pyflink
+psycopg2-binary
+protobuf<5.0.0

@@ -1,0 +1,114 @@
+x-flink_libs: &flink_libs
+  - ./flink_job/lib/flink-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-connector-kafka-1.17.2.jar
+  - ./flink_job/lib/kafka-clients-3.3.1.jar:/opt/flink/lib/kafka-clients-3.3.1.jar
+  - ./flink_job/lib/flink-connector-jdbc-3.1.2-1.17.jar:/opt/flink/lib/flink-connector-jdbc-3.1.2-1.17.jar
+  - ./flink_job/lib/postgresql-42.7.2.jar:/opt/flink/lib/postgresql-42.7.2.jar
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+
+  postgres:
+    image: postgres:14
+    hostname: postgres
+    environment:
+      POSTGRES_DB: lab3
+      POSTGRES_USER: labuser
+      POSTGRES_PASSWORD: labpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./ddl.sql:/docker-entrypoint-initdb.d/ddl.sql      
+      - ./mock_data.sql:/docker-entrypoint-initdb.d/mock_data.sql
+      - ./import_data:/import_data:ro                       
+
+  jobmanager:
+    container_name: jobmanager
+    hostname: jobmanager
+    command: ["jobmanager"]
+    image: ghcr.io/lakehq/flink:1.17.2-python3.10
+    entrypoint: ["/docker-entrypoint.sh"]
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - POSTGRES_URL=postgresql://labuser:labpass@postgres:5432/lab3
+      - POSTGRES_USER=labuser
+      - POSTGRES_PASSWORD=labpass
+      - KAFKA_BOOTSTRAP=kafka:9092
+      - KAFKA_TOPIC=raw-mock
+    ports: ["8081:8081"]
+    volumes: *flink_libs      
+
+  taskmanager:
+    container_name: taskmanager
+    image: ghcr.io/lakehq/flink:1.17.2-python3.10
+    hostname: taskmanager
+    command: ["taskmanager"]
+    depends_on: [jobmanager]
+    entrypoint: ["/docker-entrypoint.sh"]
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=4
+      - POSTGRES_URL=postgresql://labuser:labpass@postgres:5432/lab3
+      - POSTGRES_USER=labuser
+      - POSTGRES_PASSWORD=labpass
+      - KAFKA_BOOTSTRAP=kafka:9092
+      - KAFKA_TOPIC=raw-mock
+    volumes: *flink_libs      
+
+  kafka-producer:
+    build:
+      context: ./kafka-producer
+      dockerfile: Dockerfile
+    image: bigdataflink-kafka-producer
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC:     raw-mock
+    volumes:
+      - ./import_data:/data:ro
+    command: ["python", "producer.py"]
+    restart: on-failure
+
+  flink-job:
+    build: ./flink_job
+    depends_on: [kafka, postgres, jobmanager, taskmanager]
+    entrypoint: ["flink"]
+    command:
+      - run
+      - -m 
+      - jobmanager:8081 
+      - -d
+      - --python 
+      - /opt/flink/job/flink_star_job.py
+      - --pyFiles 
+      - /opt/flink/job/dimension_enrichment.py,/opt/flink/job/enriched_record.py
+      - --pyRequirements
+      - /opt/flink/job/requirements.txt
+    environment:
+      POSTGRES_URL: postgresql://labuser:labpass@postgres:5432/lab3
+      POSTGRES_USER: labuser
+      POSTGRES_PASSWORD: labpass
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: raw-mock
+    volumes: *flink_libs

@@ -1,0 +1,73 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16
+    platform: linux/arm64
+    container_name: my_postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: bigdata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./data:/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_DB: default
+    volumes:
+      - chdata:/var/lib/clickhouse
+      - ./clickhouse-config/users.xml:/etc/clickhouse-server/users.d/users.xml
+      - ./ch_init.sql:/docker-entrypoint-initdb.d/ch_init.sql  
+    networks:
+      - net
+
+  spark-master:
+    image: public.ecr.aws/bitnami/spark:latest
+    hostname: spark-master
+    user: "0:0"
+    ports:
+      - "8080:8080"
+    environment:
+      SPARK_MODE: master
+      HOME: /tmp
+    volumes:
+      - ./code:/code:ro
+      - ./jars:/opt/bitnami/spark/extra_jars:ro
+    networks:
+      - net
+
+  spark-worker:
+    image: public.ecr.aws/bitnami/spark:latest
+    user: "0:0"
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER: spark://spark-master:7077
+      HOME: /tmp
+      SPARK_EXECUTOR_MEMORY: "16g" 
+    volumes:
+      - ./code:/code:ro
+      - ./jars:/opt/bitnami/spark/extra_jars:ro
+    networks:
+      - net
+
+volumes:
+  pgdata:
+  chdata:
+
+networks:
+  net:
+    driver: bridge
